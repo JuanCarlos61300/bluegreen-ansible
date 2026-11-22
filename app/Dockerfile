@@ -1,4 +1,6 @@
 FROM eclipse-temurin:17-jre
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
 WORKDIR /app
 COPY target/hola-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
