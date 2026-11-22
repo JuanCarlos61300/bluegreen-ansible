@@ -1,0 +1,10 @@
+docker_network: bluegreen_net
+db_host: mysql
+db_name: holadb
+db_user: holauser
+db_password: "{{ vault_db_password }}"
+db_root_password: "{{ vault_db_root_password }}"
+
+blue_version: v1
+green_version: v2
+active_color: blue

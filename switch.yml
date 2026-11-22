@@ -1,0 +1,52 @@
+- name: NGINX proxy inverso y conmutación blue/green
+  hosts: local
+  tasks:
+    - name: Comprobar que active_color es válido
+      ansible.builtin.assert:
+        that: active_color in ['blue', 'green']
+        fail_msg: "active_color debe ser blue o green"
+
+    - name: Generar configuración de NGINX
+      ansible.builtin.template:
+        src: templates/default.conf.j2
+        dest: "{{ playbook_dir }}/nginx/default.conf"
+        mode: "0644"
+      register: nginx_conf
+
+    - name: Levantar NGINX
+      community.docker.docker_container:
+        name: nginx
+        image: nginx:stable
+        state: started
+        restart_policy: unless-stopped
+        published_ports:
+          - "8080:80"
+        networks:
+          - name: "{{ docker_network }}"
+        volumes:
+          - "{{ playbook_dir }}/nginx:/etc/nginx/conf.d:ro"
+
+    - name: Validar configuración de NGINX
+      community.docker.docker_container_exec:
+        container: nginx
+        command: nginx -t
+      changed_when: false
+
+    - name: Recargar NGINX sin cortar conexiones
+      community.docker.docker_container_exec:
+        container: nginx
+        command: nginx -s reload
+      when: nginx_conf.changed
+
+    - name: Verificar que responde
+      ansible.builtin.uri:
+        url: http://localhost:8080/hola
+        return_content: true
+      register: check
+      retries: 5
+      delay: 3
+      until: check.status == 200
+
+    - name: Mostrar entorno activo
+      ansible.builtin.debug:
+        msg: "Activo: {{ check.x_active_color | default(active_color) }} -> {{ check.content }}"

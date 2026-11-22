@@ -1,0 +1,54 @@
+- name: Despliegue base (red, MySQL, blue y green)
+  hosts: local
+  tasks:
+    - name: Crear red Docker
+      community.docker.docker_network:
+        name: "{{ docker_network }}"
+
+    - name: Levantar MySQL
+      community.docker.docker_container:
+        name: mysql
+        image: mysql:8.0
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network }}"
+        volumes:
+          - mysql_data:/var/lib/mysql
+        env:
+          MYSQL_ROOT_PASSWORD: "{{ db_root_password }}"
+          MYSQL_DATABASE: "{{ db_name }}"
+          MYSQL_USER: "{{ db_user }}"
+          MYSQL_PASSWORD: "{{ db_password }}"
+        healthcheck:
+          test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p{{ db_root_password }}"]
+          interval: 5s
+          timeout: 5s
+          retries: 20
+      no_log: true
+
+    - name: Esperar a que MySQL esté sano
+      community.docker.docker_container_info:
+        name: mysql
+      register: mysql_info
+      until: mysql_info.container.State.Health.Status == "healthy"
+      retries: 30
+      delay: 5
+
+    - name: Levantar app blue y green
+      community.docker.docker_container:
+        name: "app-{{ item.color }}"
+        image: "hola-app:{{ item.version }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network }}"
+        env:
+          DB_HOST: "{{ db_host }}"
+          DB_NAME: "{{ db_name }}"
+          DB_USER: "{{ db_user }}"
+          DB_PASSWORD: "{{ db_password }}"
+      loop:
+        - { color: blue,  version: "{{ blue_version }}" }
+        - { color: green, version: "{{ green_version }}" }
+      no_log: true

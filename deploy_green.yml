@@ -1,0 +1,32 @@
+- name: Desplegar nueva versión en green (sin afectar al tráfico)
+  hosts: local
+  tasks:
+    - name: Actualizar app-green
+      community.docker.docker_container:
+        name: app-green
+        image: "hola-app:{{ green_version }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network }}"
+        env:
+          DB_HOST: "{{ db_host }}"
+          DB_NAME: "{{ db_name }}"
+          DB_USER: "{{ db_user }}"
+          DB_PASSWORD: "{{ db_password }}"
+      no_log: true
+
+    - name: Esperar a que green esté sano
+      community.docker.docker_container_exec:
+        container: nginx
+        command: curl -sf http://app-green:8080/actuator/health
+      register: green_health
+      failed_when: false
+      until: green_health.rc == 0
+      retries: 20
+      delay: 3
+      changed_when: false
+
+    - name: Resultado
+      ansible.builtin.debug:
+        msg: "green ({{ green_version }}) sano: {{ green_health.stdout }}"
